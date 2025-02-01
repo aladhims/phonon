@@ -1,0 +1,11 @@
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+.idea/
+
+*.tmp
+*.log
+
+vendor/
