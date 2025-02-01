@@ -1,0 +1,5 @@
+log:
+  level: "info"
+
+storage:
+  base_path: "./data"
