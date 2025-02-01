@@ -1,5 +1,15 @@
 log:
   level: "info"
 
+server:
+  port: "8080"
+  shutdown_timeout: "10s"
+
+database:
+  driver: "sqlite"
+  sqlite:
+    path: "data/database.db"
+    seed: true
+
 storage:
   base_path: "./data"
