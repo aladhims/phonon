@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"phonon/pkg/queue"
+	"syscall"
 
 	"phonon/pkg/api"
 	"phonon/pkg/config"
@@ -30,13 +32,29 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	fileStore := storage.NewLocal("./data")
+	filestore, err := storage.NewFilestore(storage.Config{
+		Type:     storage.StorageType(viper.GetString("storage.type")),
+		BasePath: viper.GetString("storage.local.base_path")})
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
 	audioConverter := converter.NewFFMPEG()
 
-	// Create the service and handler.
-	audioService := service.NewAudioService(db, fileStore, audioConverter)
+	// Initialize Kafka producer
+	producer, err := queue.NewKafkaProducer(queue.KafkaConfig{
+		Brokers: viper.GetStringSlice("mq.kafka.brokers"),
+		Topic:   viper.GetString("mq.kafka.topic"),
+	})
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	defer producer.Close()
 
-	router := api.NewRouter(audioService)
+	// Create the service and handler.
+	audioService := service.NewAudioService(db, filestore, audioConverter, producer)
+
+	router := api.NewRouter(audioService, producer)
 
 	// Create the server.
 	server := &http.Server{
@@ -46,11 +64,11 @@ func main() {
 
 	// Channel to listen for termination signals.
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, os.Kill)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		logrus.WithField("addr", server.Addr).Info("starting server")
-		if err = server.ListenAndServe(); err != nil && !errors.Is(http.ErrServerClosed, err) {
+		if err = server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logrus.Fatalf("Server failed: %v", err)
 		}
 	}()

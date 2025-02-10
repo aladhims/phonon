@@ -3,11 +3,13 @@ package service
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	"phonon/pkg/converter"
 	"phonon/pkg/model"
+	"phonon/pkg/queue"
 	"phonon/pkg/repository"
 	"phonon/pkg/storage"
-	"time"
 )
 
 // Audio defines methods for storing and retrieving audio.
@@ -21,14 +23,16 @@ type audioServiceImpl struct {
 	repo      repository.Database
 	fileStore storage.File
 	converter converter.Audio
+	producer  queue.Producer
 }
 
 // NewAudioService creates a new AudioService instance.
-func NewAudioService(repo repository.Database, fileStore storage.File, converter converter.Audio) Audio {
+func NewAudioService(repo repository.Database, fileStore storage.File, converter converter.Audio, producer queue.Producer) Audio {
 	return &audioServiceImpl{
 		repo:      repo,
 		fileStore: fileStore,
 		converter: converter,
+		producer:  producer,
 	}
 }
 
@@ -40,14 +44,6 @@ func (s *audioServiceImpl) StoreAudio(userID int, phraseID int, inputFilePath st
 	}
 	if !userValid {
 		return errors.New("invalid user ID")
-	}
-
-	phraseValid, err := s.repo.IsValidPhrase(phraseID)
-	if err != nil {
-		return fmt.Errorf("failed to validate phrase: %w", err)
-	}
-	if !phraseValid {
-		return errors.New("invalid phrase ID")
 	}
 
 	storageFilePath := fmt.Sprintf("./data/audio_user_%d_phrase_%d.%s", userID, phraseID, outputFormat)
@@ -73,6 +69,11 @@ func (s *audioServiceImpl) StoreAudio(userID int, phraseID int, inputFilePath st
 
 // FetchAudio retrieves the audio file for the given user and phrase, and converts it if needed.
 func (s *audioServiceImpl) FetchAudio(userID int, phraseID int, targetFormat string) (string, error) {
+	// TODO: improvement -- handle userID and phraseID validation
+	if converter.IsValidFormat(targetFormat) {
+		return "", errors.New("invalid audio format")
+	}
+
 	record, err := s.repo.GetAudioRecord(userID, phraseID)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch audio record: %w", err)

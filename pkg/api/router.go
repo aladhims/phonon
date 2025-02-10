@@ -3,13 +3,14 @@ package api
 import (
 	"net/http"
 
+	"phonon/pkg/queue"
 	"phonon/pkg/service"
 
 	"github.com/gorilla/mux"
 )
 
-func NewRouter(audioService service.Audio) *mux.Router {
-	audioHandler := NewAudioHandler(audioService)
+func NewRouter(audioService service.Audio, producer queue.Producer) *mux.Router {
+	audioHandler := NewAudioHandler(audioService, producer)
 
 	router := mux.NewRouter()
 

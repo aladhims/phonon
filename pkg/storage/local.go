@@ -23,3 +23,7 @@ func (l *Local) Save(uri string, data []byte) error {
 func (l *Local) Read(uri string) ([]byte, error) {
 	return os.ReadFile(uri)
 }
+
+func (l *Local) Delete(uri string) error {
+	return os.Remove(uri)
+}

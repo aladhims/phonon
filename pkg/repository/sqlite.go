@@ -38,7 +38,6 @@ func NewSQLite(dbPath string) (Database, error) {
 // runSQLiteMigrations creates tables if they do not exist.
 func runSQLiteMigrations(db *sql.DB) error {
 	ddlStatements := []string{
-		// Users table
 		`CREATE TABLE IF NOT EXISTS users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT NOT NULL UNIQUE,
@@ -49,12 +48,6 @@ func runSQLiteMigrations(db *sql.DB) error {
 			updated_at INTEGER NOT NULL
 		);`,
 
-		// Phrases table
-		`CREATE TABLE IF NOT EXISTS phrases (
-			id INTEGER PRIMARY KEY AUTOINCREMENT
-		);`,
-
-		// Audio records table
 		`CREATE TABLE IF NOT EXISTS audio_records (
 			user_id INTEGER NOT NULL,
 			phrase_id INTEGER NOT NULL,

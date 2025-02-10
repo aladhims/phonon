@@ -4,25 +4,33 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"phonon/pkg/service"
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/sirupsen/logrus"
+
+	"phonon/pkg/queue"
+	"phonon/pkg/service"
 )
 
 // AudioHandler handles audio-related HTTP requests.
 type AudioHandler struct {
 	audioService service.Audio
+	producer     queue.Producer
 }
 
 // NewAudioHandler creates a new instance of AudioHandler.
-func NewAudioHandler(audioService service.Audio) *AudioHandler {
-	return &AudioHandler{audioService: audioService}
+func NewAudioHandler(audioService service.Audio, producer queue.Producer) *AudioHandler {
+	return &AudioHandler{audioService: audioService, producer: producer}
 }
 
 // UploadAudio handles POST requests to upload and store an audio file.
 func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
-	// Extract user_id and phrase_id from the URL using Gorilla Mux.
+	if err := os.MkdirAll("./tmp", 0755); err != nil {
+		http.Error(w, "failed to create temp directory: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	vars := mux.Vars(r)
 	userID, err := strconv.Atoi(vars["user_id"])
 	if err != nil {
@@ -51,7 +59,6 @@ func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tmpFile.Close()
-	defer os.Remove(tmpFile.Name()) // TODO: offload to background job
 
 	if _, err := io.Copy(tmpFile, file); err != nil {
 		http.Error(w, "failed to save uploaded file: "+err.Error(), http.StatusInternalServerError)
@@ -91,5 +98,7 @@ func (h *AudioHandler) GetAudio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, outputFilePath)
-	defer os.Remove(outputFilePath) // TODO: offload to background job
+	if err := queue.PublishCleanupMessage(r.Context(), h.producer, outputFilePath); err != nil {
+		logrus.WithError(err).Error("failed to schedule janitor for temporary file")
+	}
 }

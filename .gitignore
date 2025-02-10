@@ -5,6 +5,8 @@
 
 .idea/
 
+.env
+
 *.tmp
 *.log
 

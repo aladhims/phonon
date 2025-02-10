@@ -12,8 +12,6 @@ import (
 type Database interface {
 	// IsValidUser returns true if a user exists.
 	IsValidUser(userID int) (bool, error)
-	// IsValidPhrase returns true if a phrase exists.
-	IsValidPhrase(phraseID int) (bool, error)
 	// SaveAudioRecord inserts or updates an audio record.
 	SaveAudioRecord(record model.AudioRecord) error
 	// GetAudioRecord retrieves an audio record by user and phrase.

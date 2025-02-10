@@ -12,4 +12,13 @@ database:
     seed: true
 
 storage:
-  base_path: "./data"
+  type: "local"
+  local:
+    base_path: "./data"
+
+mq:
+  kafka:
+    brokers:
+      - "localhost:9092"
+    group: "test"
+    topic: test
