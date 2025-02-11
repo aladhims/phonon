@@ -2,23 +2,38 @@ package converter
 
 import (
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
+
+const defaultTargetFormat = "wav"
 
 // FFMPEG is an implementation of audio converter using ffmpeg.
 type FFMPEG struct {
+	targetFormat string
 }
 
 // NewFFMPEG returns a new instance of FFmpegConverter.
-func NewFFMPEG() Audio {
-	return &FFMPEG{}
+func NewFFMPEG(targetFormat string) Audio {
+	ffmpeg := &FFMPEG{targetFormat: targetFormat}
+	if ffmpeg.targetFormat == "" {
+		ffmpeg.targetFormat = defaultTargetFormat
+	}
+
+	return ffmpeg
 }
 
-func (f *FFMPEG) ConvertToStorageFormat(inputPath, outputPath string) error {
-	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath, outputPath)
-	return cmd.Run()
-}
+func (f *FFMPEG) ConvertToStorageFormat(inputPath string) (string, error) {
+	fileExt := filepath.Ext(inputPath)
+	pathWithoutExt := strings.TrimSuffix(inputPath, fileExt)
 
-func (f *FFMPEG) ConvertToClientFormat(inputPath, outputPath, format string) error {
+	outputPath := pathWithoutExt + f.targetFormat
+
 	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath, outputPath)
-	return cmd.Run()
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	return outputPath, nil
 }

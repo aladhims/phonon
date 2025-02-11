@@ -1,14 +1,11 @@
 package api
 
 import (
-	"io"
 	"net/http"
 	"os"
 	"strconv"
 
 	"github.com/gorilla/mux"
-	"github.com/sirupsen/logrus"
-
 	"phonon/pkg/queue"
 	"phonon/pkg/service"
 )
@@ -32,13 +29,13 @@ func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	userID, err := strconv.Atoi(vars["user_id"])
+	userID, err := strconv.ParseInt(vars["user_id"], 10, 64)
 	if err != nil {
 		http.Error(w, "invalid user_id", http.StatusBadRequest)
 		return
 	}
 
-	phraseID, err := strconv.Atoi(vars["phrase_id"])
+	phraseID, err := strconv.ParseInt(vars["phrase_id"], 10, 64)
 	if err != nil {
 		http.Error(w, "invalid phrase_id", http.StatusBadRequest)
 		return
@@ -53,19 +50,8 @@ func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	// Create a temporary file to save the uploaded content.
-	tmpFile, err := os.CreateTemp("./tmp", "upload_*.m4a")
-	if err != nil {
-		http.Error(w, "failed to create temp file: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer tmpFile.Close()
 
-	if _, err := io.Copy(tmpFile, file); err != nil {
-		http.Error(w, "failed to save uploaded file: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := h.audioService.StoreAudio(userID, phraseID, tmpFile.Name(), "wav"); err != nil {
+	if err = h.audioService.StoreAudio(r.Context(), userID, phraseID, file); err != nil {
 		http.Error(w, "failed to store audio: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -77,13 +63,13 @@ func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
 // GetAudio handles GET requests to fetch and serve an audio file.
 func (h *AudioHandler) GetAudio(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	userID, err := strconv.Atoi(vars["user_id"])
+	userID, err := strconv.ParseInt(vars["user_id"], 10, 64)
 	if err != nil {
 		http.Error(w, "invalid user_id", http.StatusBadRequest)
 		return
 	}
 
-	phraseID, err := strconv.Atoi(vars["phrase_id"])
+	phraseID, err := strconv.ParseInt(vars["phrase_id"], 10, 64)
 	if err != nil {
 		http.Error(w, "invalid phrase_id", http.StatusBadRequest)
 		return
@@ -91,14 +77,16 @@ func (h *AudioHandler) GetAudio(w http.ResponseWriter, r *http.Request) {
 
 	audioFormat := vars["audio_format"]
 
-	outputFilePath, err := h.audioService.FetchAudio(userID, phraseID, audioFormat)
+	originalURI, err := h.audioService.FetchAudio(r.Context(), userID, phraseID, audioFormat)
 	if err != nil {
 		http.Error(w, "failed to fetch audio: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	http.ServeFile(w, r, outputFilePath)
-	if err := queue.PublishCleanupMessage(r.Context(), h.producer, outputFilePath); err != nil {
-		logrus.WithError(err).Error("failed to schedule janitor for temporary file")
+	if originalURI == "" {
+		http.Error(w, "failed to fetch audio: not found", http.StatusNotFound)
+		return
 	}
+
+	http.ServeFile(w, r, originalURI)
 }

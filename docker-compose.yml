@@ -14,34 +14,39 @@ services:
         condition: service_healthy
         required: false
     environment:
-      - DATABASE_DRIVER=${DATABASE_DRIVER:-sqlite}
-      - MYSQL_HOST=mysql
-      - MYSQL_USER=${MYSQL_USER:-phonon}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-phonon_password}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-phonon}
-      - KAFKA_BROKERS=kafka:9092
+      - APP_DATABASE_DRIVER=${APP_DATABASE_DRIVER:-sqlite}
+      - APP_DATABASE_MYSQL_HOST=mysql
+      - APP_DATABASE_MYSQL_USERNAME=${APP_MYSQL_USERNAME:-phonon}
+      - APP_DATABASE_MYSQL_PASSWORD=${APP_MYSQL_PASSWORD:-phonon_password}
+      - APP_DATABASE_MYSQL_DATABASE=${APP_MYSQL_DATABASE:-phonon}
+      - APP_MQ_KAFKA_BROKERS=kafka:9092
 
-  cleanup:
+  background:
     build:
       context: .
-      dockerfile: Dockerfile.cleanup
+      dockerfile: Dockerfile.background
     volumes:
       - audio_data:/app/data
     depends_on:
       kafka:
         condition: service_healthy
     environment:
-      - KAFKA_BROKERS=kafka:9092
+      - APP_DATABASE_DRIVER=${APP_DATABASE_DRIVER:-sqlite}
+      - APP_DATABASE_MYSQL_HOST=mysql
+      - APP_DATABASE_MYSQL_USERNAME=${APP_MYSQL_USERNAME:-phonon}
+      - APP_DATABASE_MYSQL_PASSWORD=${APP_MYSQL_PASSWORD:-phonon_password}
+      - APP_DATABASE_MYSQL_DATABASE=${APP_MYSQL_DATABASE:-phonon}
+      - APP_MQ_KAFKA_BROKERS=kafka:9092
 
   mysql:
     image: mysql:8.0
     profiles:
       - mysql
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_password}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-phonon}
-      - MYSQL_USER=${MYSQL_USER:-phonon}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-phonon_password}
+      - MYSQL_ROOT_PASSWORD=${APP_MYSQL_ROOT_PASSWORD:-root_password}
+      - MYSQL_DATABASE=${APP_MYSQL_DATABASE:-phonon}
+      - MYSQL_USER=${APP_MYSQL_USERNAME:-phonon}
+      - MYSQL_PASSWORD=${APP_MYSQL_PASSWORD:-phonon_password}
     volumes:
       - mysql_data:/var/lib/mysql
       - ./sql/init:/docker-entrypoint-initdb.d

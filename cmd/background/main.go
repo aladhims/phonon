@@ -7,9 +7,10 @@ import (
 	"syscall"
 
 	"phonon/pkg/config"
+	"phonon/pkg/converter"
 	"phonon/pkg/instrumentation"
 	"phonon/pkg/queue"
-	"phonon/pkg/storage"
+	"phonon/pkg/repository"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -19,47 +20,42 @@ func main() {
 	config.Initialize()
 	instrumentation.InitializeLogging()
 
-	filestore, err := storage.NewFilestore(storage.Config{
-		Type:     storage.StorageType(viper.GetString("storage.type")),
-		BasePath: viper.GetString("storage.local.base_path")})
+	logrus.Info("Starting background with configuration:", viper.AllKeys(), viper.AllSettings())
+
+	db, err := repository.NewDatabase()
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
+	audioConverter := converter.NewFFMPEG(viper.GetString("converter.target_format"))
+
 	consumer, err := queue.NewKafkaConsumer(queue.KafkaConfig{
 		Brokers: viper.GetStringSlice("mq.kafka.brokers"),
-		GroupID: viper.GetString("mq.kafka.group"),
-		Topic:   viper.GetString("mq.kafka.topic"),
+		GroupID: viper.GetString("mq.kafka.audio_conversion.group"),
+		Topic:   viper.GetString("mq.kafka.audio_conversion.topic"),
 	})
 	if err != nil {
 		logrus.Fatal(err)
 	}
 	defer consumer.Close()
 
-	cleanupHandler := queue.NewCleanupHandler(filestore)
+	audioConversionQueue := queue.NewAudioConversion(audioConverter, db, queue.AudioConversionWithConsumer(consumer))
 
-	// Channel to listen for termination signals
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	// Create a cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start consuming janitor messages
 	go func() {
-		if err := consumer.Consume(ctx, cleanupHandler); err != nil {
-			logrus.WithError(err).Error("janitor consumer failed")
-		}
+		audioConversionQueue.StartConsuming(ctx)
 	}()
 
 	logrus.Info("Cleanup consumer service started")
 
-	// Wait for termination signal
 	<-stop
 	logrus.Info("\nShutting down gracefully...")
 
-	// Cancel the context to stop the consumer
 	cancel()
 
 	logrus.Info("Cleanup consumer service stopped cleanly.")

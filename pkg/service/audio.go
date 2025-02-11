@@ -1,9 +1,10 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"time"
+	"io"
 
 	"phonon/pkg/converter"
 	"phonon/pkg/model"
@@ -14,52 +15,59 @@ import (
 
 // Audio defines methods for storing and retrieving audio.
 type Audio interface {
-	StoreAudio(userID int, phraseID int, inputFilePath string, outputFormat string) error
-	FetchAudio(userID int, phraseID int, targetFormat string) (string, error)
+	StoreAudio(ctx context.Context, userID int64, phraseID int64, file io.Reader) error
+	FetchAudio(ctx context.Context, userID int64, phraseID int64, targetFormat string) (string, error)
 }
 
 // audioServiceImpl is the implementation of AudioService.
 type audioServiceImpl struct {
-	repo      repository.Database
-	fileStore storage.File
-	converter converter.Audio
-	producer  queue.Producer
+	repo       repository.Database
+	fileStore  storage.File
+	background *queue.AudioConversion
 }
 
 // NewAudioService creates a new AudioService instance.
-func NewAudioService(repo repository.Database, fileStore storage.File, converter converter.Audio, producer queue.Producer) Audio {
+func NewAudioService(repo repository.Database, fileStore storage.File, background *queue.AudioConversion) Audio {
 	return &audioServiceImpl{
-		repo:      repo,
-		fileStore: fileStore,
-		converter: converter,
-		producer:  producer,
+		repo:       repo,
+		fileStore:  fileStore,
+		background: background,
 	}
 }
 
 // StoreAudio converts the input audio to the desired storage format and saves it.
-func (s *audioServiceImpl) StoreAudio(userID int, phraseID int, inputFilePath string, outputFormat string) error {
-	userValid, err := s.repo.IsValidUser(userID)
+func (s *audioServiceImpl) StoreAudio(ctx context.Context, userID, phraseID int64, file io.Reader) error {
+	// if associated audio record is exist, reject the request
+	exists, err := s.repo.IsAudioRecordExists(ctx, userID, phraseID)
 	if err != nil {
-		return fmt.Errorf("failed to validate user: %w", err)
-	}
-	if !userValid {
-		return errors.New("invalid user ID")
+		return fmt.Errorf("failed to check audio record existence: %w", err)
 	}
 
-	storageFilePath := fmt.Sprintf("./data/audio_user_%d_phrase_%d.%s", userID, phraseID, outputFormat)
+	if exists {
+		return errors.New("audio record already exists")
+	}
 
-	err = s.converter.ConvertToStorageFormat(inputFilePath, storageFilePath)
+	uri, err := s.fileStore.Save(ctx, userID, phraseID, file)
 	if err != nil {
-		return fmt.Errorf("audio conversion failed: %w", err)
+		return fmt.Errorf("save audio file failed: %w", err)
+	}
+
+	conversionMessage := model.AudioConversionMessage{
+		InputURI: uri,
+	}
+
+	// conversion is done async to offload
+	if err = s.background.PublishAudioConversionJob(ctx, conversionMessage); err != nil {
+		return fmt.Errorf("failed to publish audio conversion job: %w", err)
 	}
 
 	record := model.AudioRecord{
-		UserID:    userID,
-		PhraseID:  phraseID,
-		URI:       storageFilePath,
-		CreatedAt: time.Now().Unix(),
+		UserID:   userID,
+		PhraseID: phraseID,
+		Status:   model.AudioConversionOngoing,
 	}
-	err = s.repo.SaveAudioRecord(record)
+
+	err = s.repo.SaveAudioRecord(ctx, record)
 	if err != nil {
 		return fmt.Errorf("failed to save audio record: %w", err)
 	}
@@ -68,13 +76,12 @@ func (s *audioServiceImpl) StoreAudio(userID int, phraseID int, inputFilePath st
 }
 
 // FetchAudio retrieves the audio file for the given user and phrase, and converts it if needed.
-func (s *audioServiceImpl) FetchAudio(userID int, phraseID int, targetFormat string) (string, error) {
-	// TODO: improvement -- handle userID and phraseID validation
+func (s *audioServiceImpl) FetchAudio(ctx context.Context, userID, phraseID int64, targetFormat string) (string, error) {
 	if converter.IsValidFormat(targetFormat) {
 		return "", errors.New("invalid audio format")
 	}
 
-	record, err := s.repo.GetAudioRecord(userID, phraseID)
+	record, err := s.repo.GetAudioRecord(ctx, userID, phraseID)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch audio record: %w", err)
 	}
@@ -82,12 +89,9 @@ func (s *audioServiceImpl) FetchAudio(userID int, phraseID int, targetFormat str
 		return "", errors.New("audio record not found")
 	}
 
-	outputFilePath := fmt.Sprintf("./tmp/audio_user_%d_phrase_%d.%s", userID, phraseID, targetFormat)
-
-	err = s.converter.ConvertToClientFormat(record.URI, outputFilePath, targetFormat)
-	if err != nil {
-		return "", fmt.Errorf("failed to convert audio to target format: %w", err)
+	if record.Status != model.AudioConversionCompleted {
+		return "", errors.New("audio status is not converted")
 	}
 
-	return outputFilePath, nil
+	return record.OriginalURI, nil
 }

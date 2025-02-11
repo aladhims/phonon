@@ -10,15 +10,22 @@ database:
   sqlite:
     path: "data/database.db"
     seed: true
+  mysql:
+    host: "localhost"
+    port: "3306"
+    database: "phonon"
+    username: "phonon"
+    password: "phonon_password"
 
 storage:
   type: "local"
   local:
-    base_path: "./data"
+    base_path: "./data/user/audio"
 
 mq:
   kafka:
     brokers:
       - "localhost:9092"
-    group: "test"
-    topic: test
+    audio_conversion:
+      group: "main"
+      topic: "audio_conversion"

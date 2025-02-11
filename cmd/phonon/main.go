@@ -26,43 +26,42 @@ func main() {
 	config.Initialize()
 	instrumentation.InitializeLogging()
 
-	// Initialize dependencies.
+	logrus.Info("Starting phonon with configuration:", viper.AllKeys(), viper.AllSettings())
+
 	db, err := repository.NewDatabase()
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
 	filestore, err := storage.NewFilestore(storage.Config{
-		Type:     storage.StorageType(viper.GetString("storage.type")),
+		Type:     storage.Type(viper.GetString("storage.type")),
 		BasePath: viper.GetString("storage.local.base_path")})
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
-	audioConverter := converter.NewFFMPEG()
+	audioConverter := converter.NewFFMPEG(viper.GetString("converter.target_format"))
 
-	// Initialize Kafka producer
 	producer, err := queue.NewKafkaProducer(queue.KafkaConfig{
 		Brokers: viper.GetStringSlice("mq.kafka.brokers"),
-		Topic:   viper.GetString("mq.kafka.topic"),
+		Topic:   viper.GetString("mq.kafka.audio_conversion.topic"),
 	})
 	if err != nil {
 		logrus.Fatal(err)
 	}
 	defer producer.Close()
 
-	// Create the service and handler.
-	audioService := service.NewAudioService(db, filestore, audioConverter, producer)
+	audioConversionQueue := queue.NewAudioConversion(audioConverter, db, queue.AudioConversionWithProducer(producer))
+
+	audioService := service.NewAudioService(db, filestore, audioConversionQueue)
 
 	router := api.NewRouter(audioService, producer)
 
-	// Create the server.
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%s", viper.GetString("server.port")),
 		Handler: router,
 	}
 
-	// Channel to listen for termination signals.
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
@@ -73,15 +72,12 @@ func main() {
 		}
 	}()
 
-	// Wait for a termination signal.
 	<-stop
 	logrus.Info("\nShutting down gracefully...")
 
-	// Create a context with a timeout to allow ongoing requests to complete.
 	ctx, cancel := context.WithTimeout(context.Background(), viper.GetDuration("server.shutdown_timeout"))
 	defer cancel()
 
-	// Gracefully shutdown the server.
 	if err := server.Shutdown(ctx); err != nil {
 		logrus.Fatalf("Server shutdown failed: %v", err)
 	}

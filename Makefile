@@ -1,4 +1,4 @@
-.PHONY: all build up down logs test clean rebuild setup
+.PHONY: all build up up-rebuild down logs test clean rebuild setup
 
 all: build up
 
@@ -9,7 +9,10 @@ setup:
 	./scripts/setup-env.sh
 
 up: setup
-	docker-compose --env-file .env up -d
+	docker-compose --env-file .env up -d $(if $(REBUILD),--build,)
+
+up-rebuild: setup
+	docker-compose --env-file .env up -d --build
 
 down:
 	docker-compose down
