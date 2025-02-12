@@ -32,8 +32,8 @@ func NewLocal(cfg Config) File {
 	return local
 }
 
-func (l *Local) Save(ctx context.Context, userID, phraseID int64, file io.Reader) (string, error) {
-	uri := l.createLocalStoragePath(userID, phraseID)
+func (l *Local) Save(ctx context.Context, userID, phraseID int64, file io.Reader, originalFormat string) (string, error) {
+	uri := l.createLocalStoragePath(userID, phraseID, originalFormat)
 
 	// Ensure the directory exists
 	dir := l.BasePath[:strings.LastIndex(l.BasePath, "/")+1]
@@ -55,10 +55,14 @@ func (l *Local) Save(ctx context.Context, userID, phraseID int64, file io.Reader
 }
 
 func (l *Local) Delete(ctx context.Context, userID, phraseID int64) error {
-	uri := l.createLocalStoragePath(userID, phraseID)
+	uri := l.createLocalStoragePath(userID, phraseID, l.StoredFormat)
 	return os.Remove(uri)
 }
 
-func (l *Local) createLocalStoragePath(userID, phraseID int64) string {
-	return fmt.Sprintf("%s_%d_%d.%s", l.BasePath, userID, phraseID, l.StoredFormat)
+func (l *Local) createLocalStoragePath(userID, phraseID int64, format string) string {
+	if format == "" {
+		format = l.StoredFormat
+	}
+
+	return fmt.Sprintf("%s_%d_%d.%s", l.BasePath, userID, phraseID, format)
 }

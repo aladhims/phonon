@@ -1,5 +1,7 @@
 package converter
 
+import "strings"
+
 type Format string
 
 const (
@@ -7,8 +9,8 @@ const (
 	M4A Format = "M4A"
 )
 
-func IsValidFormat(format string) bool {
-	switch Format(format) {
+func IsValidAudioFormat(format string) bool {
+	switch Format(strings.ToUpper(format)) {
 	case WAV, M4A:
 		return true
 	default:

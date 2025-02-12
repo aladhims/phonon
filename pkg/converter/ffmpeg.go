@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -27,7 +28,7 @@ func (f *FFMPEG) ConvertToStorageFormat(inputPath string) (string, error) {
 	fileExt := filepath.Ext(inputPath)
 	pathWithoutExt := strings.TrimSuffix(inputPath, fileExt)
 
-	outputPath := pathWithoutExt + f.targetFormat
+	outputPath := fmt.Sprintf("%s.%s", pathWithoutExt, f.targetFormat)
 
 	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath, outputPath)
 	err := cmd.Run()

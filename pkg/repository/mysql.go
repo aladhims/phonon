@@ -38,7 +38,7 @@ func (m *MySQL) IsAudioRecordExists(ctx context.Context, userID, phraseID int64)
 // SaveAudioRecord inserts or replaces an audio record.
 func (m *MySQL) SaveAudioRecord(ctx context.Context, record model.AudioRecord) error {
 	query := "INSERT INTO audio_records (user_id, phrase_id, original_filename, original_format, original_file_uri, status) VALUES (?, ?, ?, ?, ?, ?)"
-	_, err := m.db.ExecContext(ctx, query, record.UserID, record.PhraseID, record.OriginalURI, record.OriginalFormat, record.OriginalURI, record.Status)
+	_, err := m.db.ExecContext(ctx, query, record.UserID, record.PhraseID, record.OriginalFilename, record.OriginalFormat, record.OriginalURI, record.Status)
 	return err
 }
 
@@ -68,7 +68,7 @@ func (m *MySQL) GetAudioRecord(ctx context.Context, userID, phraseID int64) (*mo
 	row := m.db.QueryRowContext(ctx, query, userID, phraseID)
 
 	var rec model.AudioRecord
-	err := row.Scan(&rec.UserID, &rec.PhraseID, &rec.OriginalURI, &rec.OriginalFormat, &rec.OriginalURI, &rec.StoredURI, &rec.Status, &rec.CreatedAt, &rec.UpdatedAt)
+	err := row.Scan(&rec.UserID, &rec.PhraseID, &rec.OriginalFilename, &rec.OriginalFormat, &rec.OriginalURI, &rec.StoredURI, &rec.Status, &rec.CreatedAt, &rec.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil

@@ -14,7 +14,7 @@ const (
 // File is an interface for file storage operations.
 type File interface {
 	// Save writes data to a file at the given URI
-	Save(ctx context.Context, userID, phraseID int64, file io.Reader) (string, error)
+	Save(ctx context.Context, userID, phraseID int64, file io.Reader, originalFormat string) (string, error)
 	// Delete deletes the content of the file on the given URI
 	Delete(ctx context.Context, userID, phraseID int64) error
 }

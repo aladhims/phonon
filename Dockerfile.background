@@ -15,6 +15,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o background ./cmd/background
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y \
+    ffmpeg \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
