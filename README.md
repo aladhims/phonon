@@ -2,7 +2,7 @@
 
 ## Overview
 
-Phonon is a simple backend service that handles audio file storage and retrieval with conversion. It's designed to handle audio files, ensuring efficient storage and retrieval.
+Phonon is a simple scalable backend service that handles audio file storage and retrieval with format conversion.
 
 ### Core Features
 
@@ -11,8 +11,65 @@ Phonon is a simple backend service that handles audio file storage and retrieval
 - **Storage Management**: Store audio files with user and phrase associations
 - **Retrieval**: Retrieve stored audio files in the original format (M4A)
 
+### API Endpoints
+
+```
+POST /audio/user/{user_id}/phrase/{phrase_id}
+- Accepts M4A audio file upload
+- Converts to WAV for storage
+- Associates file with user and phrase
+
+GET /audio/user/{user_id}/phrase/{phrase_id}/m4a
+- Retrieves stored audio file
+- Converts from WAV to M4A
+- Validates user and phrase IDs
+```
+
+## Quick Start
+
+### Prerequisites
+
+- Docker and Docker Compose
+
+#### Optional - If you want to run the service without docker
+- Go 1.23
+- FFmpeg (for audio conversion)
+- Kafka (Supported message queue)
+- SQLite / MySQL
+
+### Setup and Run
+Easiest way to get started is to use Docker Compose. Assuming you have Docker and Docker Compose installed, you can run the service using the following command:
+
+```bash
+make run # or make run-scratch to start from scratch - deleting volumes and rebuilding images
+```
+
+### Sample API Usage
+
+1. Upload an audio file:
+```bash
+curl --request POST 'http://localhost:8080/audio/user/1/phrase/1' \
+  --header 'content-type: multipart/form-data' \
+  --form 'audio_file=@"./test_audio_file_1.m4a"'
+```
+
+2. Get processed audio:
+```bash
+curl --request GET 'http://localhost:8080/audio/user/1/phrase/1/m4a' \
+  -o './test_response_file_1_1.m4a'
+```
+
+### Makefile Commands
+- `make setup`: Initializes the development environment by running the setup script which configures necessary environment variables and dependencies
+- `make build`: Builds all Docker containers required for the service using Docker Compose
+- `make run`: Sets up the environment in non-interactive mode (using default values) and starts all services in detached mode
+- `make run-scratch`: Performs a clean restart by stopping all services, removing volumes, rebuilding containers, and starting fresh. Useful when you need a completely fresh environment
+- `make clean`: Stops all running services and removes associated Docker volumes to clean up the environment
+- `make test`: Executes all Go test suites in the project to verify functionality
+
+
 ### Architecture
-![alt text](doc/architecture.png "Title")
+![alt architecture](docs/architecture.png "Phonon Architecture")
 
 ### Implementation Scope
 
@@ -53,60 +110,6 @@ This is a simplified implementation focusing on core functionality:
 ├── scripts/             # Utility and setup scripts
 └── sql/                 # Database migration scripts
 ```
-
-### API Endpoints
-
-```
-POST /audio/user/{user_id}/phrase/{phrase_id}
-- Accepts M4A audio file upload
-- Converts to WAV for storage
-- Associates file with user and phrase
-
-GET /audio/user/{user_id}/phrase/{phrase_id}/m4a
-- Retrieves stored audio file
-- Converts from WAV to M4A
-- Validates user and phrase IDs
-```
-
-## Quick Start
-
-### Prerequisites
-
-- Go 1.19+
-- Docker and Docker Compose
-- FFmpeg (for audio conversion)
-- SQLite / MySQL
-
-### Setup and Run
-Easiest way to get started is to use Docker Compose. It will start all the necessary services (Kafka, MySQL, and the Phonon service).
-
-Assuming you have Docker and Docker Compose installed, you can run the service using the following command:
-
-```bash
-make run # or make run-scratch to start from scratch - deleting volumes and rebuilding images
-```
-
-### Sample API Usage
-
-1. Upload an audio file:
-```bash
-curl --request POST 'http://localhost:8080/audio/user/1/phrase/1' \
-  --form 'audio_file=@"./test_audio_file_1.m4a"'
-```
-
-2. Get processed audio:
-```bash
-curl --request GET 'http://localhost:8080/audio/user/1/phrase/1/m4a' \
-  -o './test_response_file_1_1.m4a'
-```
-
-### Makefile Commands
-- `make setup`: Initializes the development environment by running the setup script which configures necessary environment variables and dependencies
-- `make build`: Builds all Docker containers required for the service using Docker Compose
-- `make run`: Sets up the environment in non-interactive mode and starts all services (Kafka, MySQL, and Phonon) in detached mode
-- `make run-scratch`: Performs a clean restart by stopping all services, removing volumes, rebuilding containers, and starting fresh. Useful when you need a completely fresh environment
-- `make clean`: Stops all running services and removes associated Docker volumes to clean up the environment
-- `make test`: Executes all Go test suites in the project to verify functionality
 
 ## Improvement Areas
 

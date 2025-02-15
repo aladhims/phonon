@@ -16,12 +16,12 @@ import (
 
 const dirPermissions = 0755
 
-// SQLite is a SQLite-based implementation of DB.
+// SQLite is a SQLite-based implementation of DB
 type SQLite struct {
 	db *sql.DB
 }
 
-// NewSQLite returns a new instance of SQLite.
+// NewSQLite returns a new instance of SQLite
 func NewSQLite(dbPath string) (Database, error) {
 	// Ensure the directory exists
 	dir := filepath.Dir(dbPath)
@@ -59,7 +59,6 @@ func runSQLiteMigrations(db *sql.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_audio_records_user_phrase ON audio_records(user_id, phrase_id);`,
 	}
 
-	// Execute each DDL statement.
 	for _, ddl := range ddlStatements {
 		if _, err := db.Exec(ddl); err != nil {
 			return fmt.Errorf("migration failed: %w", err)

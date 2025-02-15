@@ -51,7 +51,6 @@ func (s *audioServiceImpl) StoreAudio(ctx context.Context, userID, phraseID int6
 		}
 	}()
 
-	// if associated audio record is exist, reject the request
 	exists, err := tx.IsAudioRecordExists(ctx, userID, phraseID)
 	if err != nil {
 		logrus.Error("failed to check audio record existence", logrus.WithError(err))

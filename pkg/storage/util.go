@@ -1,5 +1,6 @@
 package storage
 
+// ExtractFileFormat extracts the file format from a filename
 func ExtractFileFormat(filename string) string {
 	lastDotIndex := -1
 	for i := len(filename) - 1; i >= 0; i-- {

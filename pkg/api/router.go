@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// NewRouter creates a new router for Phonon Service
 func NewRouter(audioService service.Audio, producer queue.Producer) *mux.Router {
 	audioHandler := NewAudioHandler(audioService, producer)
 
