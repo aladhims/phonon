@@ -11,6 +11,7 @@ import (
 	"phonon/pkg/service"
 
 	"github.com/gorilla/mux"
+	"github.com/spf13/viper"
 )
 
 // AudioHandler handles audio-related HTTP requests.
@@ -42,6 +43,12 @@ func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
 	phraseID, err := strconv.ParseInt(vars["phrase_id"], 10, 64)
 	if err != nil {
 		middleware.WriteError(w, errors.ErrInvalidInput)
+		return
+	}
+
+	maxSize := viper.GetInt64("server.max_upload_size")
+	if r.ContentLength > maxSize {
+		middleware.WriteError(w, errors.ErrFileTooLarge)
 		return
 	}
 

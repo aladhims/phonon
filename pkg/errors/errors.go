@@ -21,6 +21,9 @@ var (
 
 	// ErrInvalidAudioFormat represents when the provided audio format is not supported
 	ErrInvalidAudioFormat = errors.New("invalid or unsupported audio format")
+
+	// ErrFileTooLarge represents when the uploaded file exceeds the maximum allowed size
+	ErrFileTooLarge = errors.New("file is too large")
 )
 
 // System errors

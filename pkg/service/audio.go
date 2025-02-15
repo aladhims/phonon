@@ -38,8 +38,21 @@ func NewAudioService(repo repository.Database, fileStore storage.File, backgroun
 
 // StoreAudio converts the input audio to the desired storage format and saves it.
 func (s *audioServiceImpl) StoreAudio(ctx context.Context, userID, phraseID int64, file io.Reader, filename string) error {
+	tx, err := s.repo.BeginTx(ctx)
+	if err != nil {
+		logrus.Error("failed to begin transaction", logrus.WithError(err))
+		return pkgerrors.ErrDatabaseOperation
+	}
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				logrus.Error("failed to rollback transaction", logrus.WithError(rbErr))
+			}
+		}
+	}()
+
 	// if associated audio record is exist, reject the request
-	exists, err := s.repo.IsAudioRecordExists(ctx, userID, phraseID)
+	exists, err := tx.IsAudioRecordExists(ctx, userID, phraseID)
 	if err != nil {
 		logrus.Error("failed to check audio record existence", logrus.WithError(err))
 		return pkgerrors.ErrDatabaseOperation
@@ -81,9 +94,14 @@ func (s *audioServiceImpl) StoreAudio(ctx context.Context, userID, phraseID int6
 		OriginalURI:      uri,
 	}
 
-	err = s.repo.SaveAudioRecord(ctx, record)
+	err = tx.SaveAudioRecord(ctx, record)
 	if err != nil {
 		logrus.Error("failed to save audio record", logrus.WithError(err))
+		return pkgerrors.ErrDatabaseOperation
+	}
+
+	if err = tx.Commit(); err != nil {
+		logrus.Error("failed to commit transaction", logrus.WithError(err))
 		return pkgerrors.ErrDatabaseOperation
 	}
 

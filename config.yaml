@@ -4,6 +4,7 @@ log:
 server:
   port: "8080"
   shutdown_timeout: "10s"
+  max_upload_size: "1MB"
 
 database:
   driver: "sqlite"
