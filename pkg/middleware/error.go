@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	pkgerrors "phonon/pkg/errors"
+
+	"github.com/sirupsen/logrus"
 )
 
 // ErrorResponse represents the structure of error responses
@@ -14,15 +16,15 @@ type ErrorResponse struct {
 }
 
 // ErrorHandler wraps an http.HandlerFunc and provides standardized error handling
-func ErrorHandler(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func ErrorHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		srw := &statusResponseWriter{ResponseWriter: w}
 		next.ServeHTTP(srw, r)
 
 		if srw.status == 0 {
 			srw.WriteHeader(http.StatusOK)
 		}
-	}
+	})
 }
 
 // statusResponseWriter wraps http.ResponseWriter to capture status code
@@ -38,14 +40,15 @@ func (w *statusResponseWriter) WriteHeader(status int) {
 
 // WriteError writes an error response with appropriate status code and message
 func WriteError(w http.ResponseWriter, err error) {
+	logrus.WithError(err).Error("Error occurred in API")
+
 	var response ErrorResponse
 	var status int
 
 	switch {
 	case errors.Is(err, pkgerrors.ErrInvalidInput):
 		status = http.StatusBadRequest
-		response.Message = err.Error()
-
+		response.Message = "Invalid input provided"
 	case errors.Is(err, pkgerrors.ErrNotFound):
 		status = http.StatusNotFound
 		response.Message = err.Error()
@@ -70,9 +73,13 @@ func WriteError(w http.ResponseWriter, err error) {
 		status = http.StatusInternalServerError
 		response.Message = "An internal error occurred"
 
+	case errors.Is(err, pkgerrors.ErrFileTooLarge):
+		status = http.StatusBadRequest
+		response.Message = err.Error()
+
 	default:
 		status = http.StatusInternalServerError
-		response.Message = "An unexpected error occurred"
+		response.Message = "Internal server error"
 	}
 
 	w.Header().Set("Content-Type", "application/json")

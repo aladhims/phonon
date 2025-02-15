@@ -9,10 +9,9 @@ import (
 
 // KafkaConfig holds configuration for Kafka connection
 type KafkaConfig struct {
-	Brokers []string
-	Topic   string
-	GroupID string
-	// Additional configurations
+	Brokers     []string
+	Topic       string
+	GroupID     string
 	MinBytes    int
 	MaxBytes    int
 	MaxAttempts int

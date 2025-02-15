@@ -26,7 +26,7 @@ const (
 	// LocalStorage represents local file system storage
 	LocalStorage Type = "local"
 	// S3Storage represents Amazon S3 storage
-	S3Storage Type = "s3" // TODO: supported in the future
+	S3Storage Type = "s3" // TODO: to be supported in the future
 )
 
 // Config holds the configuration for storage initialization

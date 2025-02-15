@@ -1,222 +1,132 @@
 # Phonon Service
 
-Phonon is a scalable audio processing service that handles audio file uploads, format conversions, and storage management. It provides a robust API for audio file operations with asynchronous processing capabilities using Kafka for better scalability.
-
-## Table of Contents
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Features](#features)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Configuration](#configuration)
-- [API Documentation](#api-documentation)
-- [Database Design](#database-design)
-- [Development](#development)
-- [Improvement Plan](#improvement-plan)
-
 ## Overview
 
-Phonon is designed to handle audio file processing at scale. It supports various audio formats and provides a clean REST API for file operations. The service uses a microservices architecture with the following main components:
+Phonon is a simple backend service that handles audio file storage and retrieval with conversion. It's designed to handle audio files, ensuring efficient storage and retrieval.
 
-- REST API for file uploads and retrievals
-- Kafka-based message queue for asynchronous processing
-- Audio format converter using FFmpeg
-- Flexible storage backend (Local/S3)
-- Cleanup service (Janitor) for temporary files
+### Core Features
 
-## Architecture
+- **Audio Upload**: Accept audio files in a specific format (currently M4A)
+- **Format Conversion**: Convert between M4A (client) and WAV (storage) formats
+- **Storage Management**: Store audio files with user and phrase associations
+- **Retrieval**: Retrieve stored audio files in the original format (M4A)
+
+### Architecture
+![alt text](doc/architecture.png "Title")
+
+### Implementation Scope
+
+This is a simplified implementation focusing on core functionality:
+
+- Basic database schema with user IDs and phrase IDs
+- Simple file storage on local filesystem
+- FFmpeg for audio format conversion
+- No authentication/authorization (development purpose only)
+
+### Design Decisions
+
+- **Asynchronous Processing**: Chosen for better scalability as immediate audio retrieval wasn't a requirement
+- **Audio Format Storage**: store both original and converted formats to prioritize fast upload and retrieval
+- **Modular Database**: Supports both SQLite and MySQL
+- **Modular Storage**: Flexible storage backend - currently only supports local filesystem (extensible to cloud storage like AWS S3)
+- **FFmpeg Integration**: Industry-standard tool for reliable audio processing
+
+## Project Structure
 
 ```
-┌─────────────┐         ┌─────────────┐         ┌─────────────┐
-│             │         │             │         │             │
-│  REST API   ├────────►│   Kafka    ├────────►│  Converter  │
-│             │         │             │         │             │
-└─────────────┘         └─────────────┘         └─────────────┘
-       ▲                                               │
-       │                                               ▼
-       │                                        ┌─────────────┐
-       │                                        │             │
-       └────────────────────────────────────────┤   Storage   │
-                                                │             │
-                                                └─────────────┘
+├── cmd/                 
+│   ├── background/      # Background processing service
+│   └── phonon/          # Main HTTP service application
+├── pkg/                 
+│   ├── api/             # REST API handlers and routing
+│   ├── config/          # Configuration management
+│   ├── converter/       # Audio format conversion package
+│   ├── errors/          # Custom error definitions
+│   ├── instrumentation/ # Logging and metrics
+│   ├── middleware/      # HTTP middleware components
+│   ├── model/           # Data models and structures
+│   ├── queue/           # Message queue implementation
+│   ├── repository/      # Database access layer
+│   ├── service/         # Core business logic
+│   └── storage/         # File Storage backend implementations
+├── docs/                # Documentation and diagrams
+├── scripts/             # Utility and setup scripts
+└── sql/                 # Database migration scripts
 ```
 
-### Component Details
+### API Endpoints
 
-1. **REST API**
-   - Handles file uploads and downloads
-   - User authentication and authorization
-   - Request validation and error handling
+```
+POST /audio/user/{user_id}/phrase/{phrase_id}
+- Accepts M4A audio file upload
+- Converts to WAV for storage
+- Associates file with user and phrase
 
-2. **Kafka Queue**
-   - Manages asynchronous processing tasks
-   - Handles cleanup job distribution
-   - Ensures system scalability
+GET /audio/user/{user_id}/phrase/{phrase_id}/m4a
+- Retrieves stored audio file
+- Converts from WAV to M4A
+- Validates user and phrase IDs
+```
 
-3. **Converter**
-   - FFmpeg-based audio format conversion
-   - Supports multiple audio formats
-   - Optimized for performance
-
-4. **Storage**
-   - Pluggable storage backend
-   - Supports local filesystem and S3
-   - Efficient file management
-
-## Features
-
-- Audio file upload and download
-- Multiple audio format support
-- Asynchronous processing
-- Scalable architecture
-- Automatic temporary file cleanup
-- Configurable storage backend
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
-- Go 1.19 or later
+- Go 1.19+
 - Docker and Docker Compose
-- FFmpeg
-- MySQL/SQLite
-- Kafka
+- FFmpeg (for audio conversion)
+- SQLite / MySQL
 
-### Installation
+### Setup and Run
+Easiest way to get started is to use Docker Compose. It will start all the necessary services (Kafka, MySQL, and the Phonon service).
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/phonon.git
-   cd phonon
-   ```
+Assuming you have Docker and Docker Compose installed, you can run the service using the following command:
 
-2. Install dependencies:
-   ```bash
-   make deps
-   ```
-
-3. Build the service:
-   ```bash
-   make build
-   ```
-
-### Configuration
-
-The service uses a `config.yaml` file for configuration. Here's an example configuration:
-
-```yaml
-server:
-  port: 8080
-  host: localhost
-
-database:
-  driver: mysql
-  dsn: user:password@tcp(localhost:3306)/phonon
-
-kafka:
-  brokers:
-    - localhost:9092
-  topics:
-    cleanup: cleanup-topic
-
-storage:
-  type: local
-  path: /path/to/storage
-  # For S3:
-  # type: s3
-  # bucket: your-bucket
-  # region: us-west-2
+```bash
+make run # or make run-scratch to start from scratch - deleting volumes and rebuilding images
 ```
 
-## API Documentation
+### Sample API Usage
 
-### Upload Audio
-```http
-POST /api/v1/users/{user_id}/phrases/{phrase_id}/audio
-Content-Type: multipart/form-data
-
-Form Data:
-- audio_file: The audio file to upload
+1. Upload an audio file:
+```bash
+curl --request POST 'http://localhost:8080/audio/user/1/phrase/1' \
+  --form 'audio_file=@"./test_audio_file_1.m4a"'
 ```
 
-### Get Audio
-```http
-GET /api/v1/users/{user_id}/phrases/{phrase_id}/audio/{format}
+2. Get processed audio:
+```bash
+curl --request GET 'http://localhost:8080/audio/user/1/phrase/1/m4a' \
+  -o './test_response_file_1_1.m4a'
 ```
-
-## Database Design
-
-### Users Table
-```sql
-CREATE TABLE users (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### Audio Files Table
-```sql
-CREATE TABLE audio_files (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    user_id INT NOT NULL,
-    phrase_id INT NOT NULL,
-    file_path VARCHAR(255) NOT NULL,
-    format VARCHAR(10) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-```
-
-## Development
 
 ### Makefile Commands
+- `make setup`: Initializes the development environment by running the setup script which configures necessary environment variables and dependencies
+- `make build`: Builds all Docker containers required for the service using Docker Compose
+- `make run`: Sets up the environment in non-interactive mode and starts all services (Kafka, MySQL, and Phonon) in detached mode
+- `make run-scratch`: Performs a clean restart by stopping all services, removing volumes, rebuilding containers, and starting fresh. Useful when you need a completely fresh environment
+- `make clean`: Stops all running services and removes associated Docker volumes to clean up the environment
+- `make test`: Executes all Go test suites in the project to verify functionality
 
-- `make build`: Build the service
-- `make test`: Run tests
-- `make run`: Run the service
-- `make docker`: Build Docker image
-- `make docker-compose`: Run with Docker Compose
-- `make clean`: Clean build artifacts
+## Improvement Areas
 
-### Project Structure
+### Security
+- Implement user authentication and authorization
+- Add additional input validation and sanitization
+- Secure file storage with proper permissions
 
-```
-├── cmd/                 # Command line applications
-│   ├── janitor/        # Cleanup service
-│   └── phonon/         # Main service
-├── pkg/                # Package code
-│   ├── api/            # REST API handlers
-│   ├── converter/      # Audio conversion
-│   ├── queue/          # Message queue
-│   ├── service/        # Business logic
-│   └── storage/        # Storage backends
-└── scripts/            # Utility scripts
-```
+### Scalability
+- Use cloud storage (e.g., S3) for audio files
+- Implement caching for frequently accessed files
+- Add load balancing for high availability
 
-## Improvement Plan
+### Reliability
+- Add comprehensive error handling
+- Implement retry mechanisms for failed operations
+- Add automated backup solutions
 
-### Short Term
-1. Add user authentication and authorization
-2. Implement rate limiting
-3. Add API documentation using Swagger
-4. Improve error handling and logging
-5. Add metrics and monitoring
-
-### Medium Term
-1. Add support for more audio formats
-2. Implement audio processing pipeline
-3. Add caching layer
-4. Improve test coverage
-5. Add API versioning
-
-### Long Term
-1. Implement streaming support
-2. Add audio analysis features
-3. Support for multiple storage backends
-4. Implement audio processing plugins
-5. Add support for batch processing
-
-## Design Decision
-1. Using Asynchronous processing for better scalability as it doesn't explicitly stated that the API should reflect the audio retrieval
+### Monitoring
+- Add detailed logging and metrics
+- Integrate with distributed tracing
+- Implement health checks
+- Set up monitoring dashboards

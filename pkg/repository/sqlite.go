@@ -2,16 +2,19 @@ package repository
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	"database/sql"
 	"errors"
 	"fmt"
 
 	"phonon/pkg/model"
-	"phonon/pkg/repository/seed"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+const dirPermissions = 0755
 
 // SQLite is a SQLite-based implementation of DB.
 type SQLite struct {
@@ -20,6 +23,12 @@ type SQLite struct {
 
 // NewSQLite returns a new instance of SQLite.
 func NewSQLite(dbPath string) (Database, error) {
+	// Ensure the directory exists
+	dir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dir, dirPermissions); err != nil {
+		return nil, fmt.Errorf("failed to create database directory: %w", err)
+	}
+
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
@@ -29,11 +38,6 @@ func NewSQLite(dbPath string) (Database, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	err = seed.SQLite(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to seed database: %w", err)
-	}
-
 	return &SQLite{db: db}, nil
 }
 
@@ -41,19 +45,18 @@ func NewSQLite(dbPath string) (Database, error) {
 func runSQLiteMigrations(db *sql.DB) error {
 	ddlStatements := []string{
 		`CREATE TABLE IF NOT EXISTS audio_records (
-			user_id INTEGER NOT NULL,
-			phrase_id INTEGER NOT NULL,
-			original_filename TEXT,
-			original_format TEXT,
-			original_file_uri TEXT,
-			stored_file_uri TEXT,
-			status INTEGER NOT NULL DEFAULT 0,
-			created_at INTEGER NOT NULL DEFAULT GETDATE(),
-    		updated_at INTEGER NOT NULL DEFAULT GETDATE(),
-			PRIMARY KEY (user_id, phrase_id),
-			FOREIGN KEY (user_id) REFERENCES users(id),
-			FOREIGN KEY (phrase_id) REFERENCES phrases(id)
-		);`,
+			user_id BIGINT NOT NULL,
+			phrase_id BIGINT NOT NULL,
+			original_filename VARCHAR(255),
+			original_format VARCHAR(10),
+			original_file_uri VARCHAR(255),
+			stored_file_uri VARCHAR(255),
+			status INT NOT NULL DEFAULT 0,
+			created_at BIGINT NOT NULL DEFAULT (strftime('%s','now')),
+			updated_at BIGINT NOT NULL DEFAULT (strftime('%s','now')),
+			PRIMARY KEY (user_id, phrase_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_audio_records_user_phrase ON audio_records(user_id, phrase_id);`,
 	}
 
 	// Execute each DDL statement.
@@ -66,7 +69,6 @@ func runSQLiteMigrations(db *sql.DB) error {
 	return nil
 }
 
-// SaveAudioRecord inserts or replaces an audio record.
 // sqliteTx implements the Transaction interface for SQLite
 type sqliteTx struct {
 	tx *sql.Tx
@@ -81,7 +83,7 @@ func (t *sqliteTx) Rollback() error {
 }
 
 func (t *sqliteTx) SaveAudioRecord(ctx context.Context, record model.AudioRecord) error {
-	query := "INSERT OR REPLACE INTO audio_records (user_id, phrase_id, original_filename, original_format, original_file_uri, status) VALUES (?, ?, ?, ?, ?, ?)"
+	query := "INSERT INTO audio_records (user_id, phrase_id, original_filename, original_format, original_file_uri, status) VALUES (?, ?, ?, ?, ?, ?)"
 	_, err := t.tx.ExecContext(ctx, query, record.UserID, record.PhraseID, record.OriginalFilename, record.OriginalFormat, record.OriginalURI, record.Status)
 	return err
 }
@@ -90,12 +92,18 @@ func (t *sqliteTx) GetAudioRecord(ctx context.Context, userID, phraseID int64) (
 	query := "SELECT user_id, phrase_id, original_filename, original_format, original_file_uri, stored_file_uri, status, created_at, updated_at FROM audio_records WHERE user_id = ? AND phrase_id = ?"
 	row := t.tx.QueryRowContext(ctx, query, userID, phraseID)
 	var rec model.AudioRecord
-	err := row.Scan(&rec.UserID, &rec.PhraseID, &rec.OriginalFilename, &rec.OriginalFormat, &rec.OriginalURI, &rec.StoredURI, &rec.Status, &rec.CreatedAt, &rec.UpdatedAt)
+	var storedURI sql.NullString
+	err := row.Scan(&rec.UserID, &rec.PhraseID, &rec.OriginalFilename, &rec.OriginalFormat, &rec.OriginalURI, &storedURI, &rec.Status, &rec.CreatedAt, &rec.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
+	}
+	if storedURI.Valid {
+		rec.StoredURI = storedURI.String
+	} else {
+		rec.StoredURI = ""
 	}
 	return &rec, nil
 }
@@ -171,7 +179,7 @@ func (s *SQLite) IsAudioRecordExists(ctx context.Context, userID, phraseID int64
 
 // SaveAudioRecord inserts or replaces an audio record.
 func (s *SQLite) SaveAudioRecord(ctx context.Context, record model.AudioRecord) error {
-	query := "INSERT OR REPLACE INTO audio_records (user_id, phrase_id, original_filename, original_format, original_file_uri, status) VALUES (?, ?, ?, ?, ?, ?)"
+	query := "INSERT INTO audio_records (user_id, phrase_id, original_filename, original_format, original_file_uri, status) VALUES (?, ?, ?, ?, ?, ?)"
 	_, err := s.db.ExecContext(ctx, query, record.UserID, record.PhraseID, record.OriginalFilename, record.OriginalFormat, record.OriginalURI, record.Status)
 	return err
 }
@@ -181,12 +189,18 @@ func (s *SQLite) GetAudioRecord(ctx context.Context, userID, phraseID int64) (*m
 	query := "SELECT user_id, phrase_id, original_filename, original_format, original_file_uri, stored_file_uri, status, created_at, updated_at FROM audio_records WHERE user_id = ? AND phrase_id = ?"
 	row := s.db.QueryRowContext(ctx, query, userID, phraseID)
 	var rec model.AudioRecord
-	err := row.Scan(&rec.UserID, &rec.PhraseID, &rec.OriginalFilename, &rec.OriginalFormat, &rec.OriginalURI, &rec.StoredURI, &rec.Status, &rec.CreatedAt, &rec.UpdatedAt)
+	var storedURI sql.NullString
+	err := row.Scan(&rec.UserID, &rec.PhraseID, &rec.OriginalFilename, &rec.OriginalFormat, &rec.OriginalURI, &storedURI, &rec.Status, &rec.CreatedAt, &rec.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
+	}
+	if storedURI.Valid {
+		rec.StoredURI = storedURI.String
+	} else {
+		rec.StoredURI = ""
 	}
 	return &rec, nil
 }

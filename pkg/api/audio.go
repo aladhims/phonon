@@ -14,13 +14,15 @@ import (
 	"github.com/spf13/viper"
 )
 
-// AudioHandler handles audio-related HTTP requests.
+const defaultMaxUploadSize int64 = 10 * 1024 * 1024 // 10 MB
+
+// AudioHandler handles audio-related HTTP requests
 type AudioHandler struct {
 	audioService service.Audio
 	producer     queue.Producer
 }
 
-// NewAudioHandler creates a new instance of AudioHandler.
+// NewAudioHandler creates a new instance of AudioHandler
 func NewAudioHandler(audioService service.Audio, producer queue.Producer) *AudioHandler {
 	return &AudioHandler{audioService: audioService, producer: producer}
 }
@@ -31,7 +33,7 @@ type SuccessResponse struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
-// UploadAudio handles POST requests to upload and store an audio file.
+// UploadAudio handles POST requests to upload and store an audio file
 func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID, err := strconv.ParseInt(vars["user_id"], 10, 64)
@@ -47,6 +49,10 @@ func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	maxSize := viper.GetInt64("server.max_upload_size")
+	if maxSize == 0 {
+		maxSize = defaultMaxUploadSize
+	}
+
 	if r.ContentLength > maxSize {
 		middleware.WriteError(w, errors.ErrFileTooLarge)
 		return
@@ -73,7 +79,7 @@ func (h *AudioHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// GetAudio handles GET requests to fetch and serve an audio file.
+// GetAudio handles GET requests to fetch and serve an audio file
 func (h *AudioHandler) GetAudio(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID, err := strconv.ParseInt(vars["user_id"], 10, 64)

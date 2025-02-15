@@ -93,7 +93,12 @@ func (a *AudioConversion) Handle(ctx context.Context, msg Message) error {
 		return err
 	}
 
-	return a.repo.SaveConvertedFormat(ctx, conversionMessage.UserID, conversionMessage.PhraseID, outputPath)
+	err = a.repo.SaveConvertedFormat(ctx, conversionMessage.UserID, conversionMessage.PhraseID, outputPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (a *AudioConversion) StartConsuming(ctx context.Context) {
